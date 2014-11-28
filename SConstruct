@@ -37,7 +37,16 @@
 # $ scons EXTRA_LIB=<my-extra-library-dir>
 #
 
-AVR_PATH_PREFIX = '/usr/share/arduino/hardware/tools/avr/bin/avr-'
+
+#
+# CONFIG
+#
+
+#AVR_PATH_PREFIX = '/usr/share/arduino/hardware/tools/avr/bin/avr-'
+AVR_PATH_PREFIX = '/usr/bin/avr-'
+TTY = '/dev/ttyACM*'
+SKETCHBOOK_PATH = '~/sketchbook/'
+
 
 from glob import glob
 from itertools import ifilter, imap
@@ -112,9 +121,9 @@ elif platform == 'win32':
 else:
     # For Ubuntu Linux (9.10 or higher)
     ARDUINO_HOME        = resolve_var('ARDUINO_HOME', '/usr/share/arduino')
-    ARDUINO_PORT        = resolve_var('ARDUINO_PORT', getUsbTty('/dev/ttyACM*'))
+    ARDUINO_PORT        = resolve_var('ARDUINO_PORT', getUsbTty(TTY))
     SKETCHBOOK_HOME     = resolve_var('SKETCHBOOK_HOME',
-                                      path.expanduser('~/sketchbook/'))
+                                      path.expanduser(SKETCHBOOK_PATH))
     AVR_HOME            = resolve_var('AVR_HOME',
                                       path.join(ARDUINO_HOME, 'hardware/tools/avr/bin'))
     AVR_HOME_DUDE       = resolve_var('AVR_HOME',
@@ -323,7 +332,7 @@ def fnPrintInfo(target, source, env):
         print "* %s: %s (%s)"%(k, value, cameFrom)
     print "* avr-size:"
     print AVR_PATH_PREFIX+'size'
-    run([AVR_PATH_PREFIX + 'size', '--target=ihex', p+str(source[0])])
+    run([AVR_PATH_PREFIX + 'size', '--target=ihex', str(source[0])])
     # TODO: check binary size
     print "* maximum size for hex file: %s bytes" % getBoardConf('upload.maximum_size')
 
