@@ -1,17 +1,37 @@
-#include <TinyGPS.h>
-#include <DHT.h>
-#include <Wire.h>
-#include <Adafruit_BMP085.h>
+/*
+ * 2014 - Patrice.S
+ */
+
 #include <GSM.h>
+#include <TinyGPS++.h>
 
-#define DHTPIN 4 
-#define DHTTYPE DHT11
+#include <AltSoftSerial.h>
+#include "floatToString.h"
 
 
-// ---------------------------------- //
-//
-// Main configuration
-//
+/* PINS Configuration (GSM Board)
+ * (1  : gsm tx)
+ * (2  : gsm rx)
+ *  4  : humidity DHT data
+ *  9  : gps tx
+ *  8  : gps rx
+ *  10 : sd card (used to select card)
+ *  11 : sd card
+ *  12 : sd card
+ *  13 : sd card (?)
+ *  a5 : pressure SCL
+ *  a4 : pressure SDA
+ *
+ *
+ */
+
+
+/*
+ * Main Configuration
+ */
+
+// General conf
+#define DELAY 6000
 
 // GSM settings
 #define GSMPINNUMBER "" // PIN CODE !
@@ -24,115 +44,96 @@ char server[] = "quarkdev.com";
 char path[] = "/~patrice/orbiter/index.php";
 int port = 80;
 
-// ---------------------------------- //
+// GPS config
+#define GPS_RX_PIN 0
+#define GPS_RATE 9600 // gps baud rate (datasheet)
+
 
 // Init lib ref
-DHT dht(DHTPIN, DHTTYPE); // Humidity Sensor
-Adafruit_BMP085 bmp; // Pressure Sensor
 GSM gsmAccess(true);
 GPRS gprsAccess;
 GSMClient client;
-GSMScanner scannerNetworks;
-//GSMModem modem;
+TinyGPSPlus gps;
 
-// GSM default values
-String IMEI = "";
-String errortext = "ERROR";
+
+AltSoftSerial ss;
+
 
 void setup() {
-	Serial.println("START");
-	Serial.begin(9600);
-	dht.begin();
-	bmp.begin();
+	Serial.begin(4800); // or 4800
+	Serial.println(F("INIT..."));
+
+	ss.begin(GPS_RATE);
+
 	boolean gsmConnected = false;
 
-	// Enable GSM connection
+	// Test GSM connection
 	while (!gsmConnected) {
 		if ((gsmAccess.begin(GSMPINNUMBER) == GSM_READY) &
 			(gprsAccess.attachGPRS(GPRS_APN, GPRS_LOGIN, GPRS_PASSWORD) == GPRS_READY)) {
 			gsmConnected = true;
-			Serial.println("GSM module connected");
 		} else {
-			Serial.println("GSM module not connected");
 			delay(1000);
 		}
 	}
 
-	// Init GPRS connection
+	// Test GPRS connect (send HTTP request)
 	if (client.connect(server, port)) {
-		Serial.print("Send HTTP resquest to : ");
-
-		// HTTP request
 		client.print("GET ");
 		client.print(path);
 		client.println(" HTTP/1.0");
 		client.println();
-		// TODO : add data with POST
+		Serial.println("OK");
 	} else {
-		Serial.println("Connection failed");
+		Serial.println("NOT OK");
 	}
 }
 
 void loop() {
-	// GSM
-	//Serial.print("Networks : ");
-	//Serial.println(scannerNetworks.readNetworks()); // return list
-	//Serial.print("Current Carrier : ");
-	//Serial.println(scannerNetworks.getCurrentCarrier());
-	//Serial.print("Serial strength : ");
-	//Serial.println(scannerNetworks.getSignalStrength());
+	String gpsData = "";
 
-	// GPRS connection
-	Serial.println("--- HTTP Connection ---");
-	if (!client.available() && !client.connected()) {
-		Serial.println("Disconnecting from client");
+	// Read GPS data
+	while (ss.available() > 0) { 
+		gps.encode(ss.read());
+	}
+	
+	// Parse values (for SMS)
+	char buffer[25];
+	String lat = floatToString(buffer, gps.location.lat(), 5);
+	String lng = floatToString(buffer, gps.location.lng(), 5);
+	String alt = String(gps.altitude.meters());
+
+	// POST data request
+	gpsData += "lat=" + lat;
+	gpsData += "&lng=" + lng;
+	gpsData += "&alt=" + alt;
+	gpsData += "&hour=" + (String) gps.time.hour();
+	gpsData += "&minute=" + (String) gps.time.minute();
+	gpsData += "&second=" + (String) gps.time.second();
+	gpsData += "&speed=" + (String) gps.speed.kmph();
+	gpsData += "&sat=" + (String) gps.satellites.value();
+
+	Serial.println(F("GPS DATA : "));
+	Serial.println(gpsData);
+
+	if (client.connect(server, port)) {
+		client.print("POST ");
+		client.print(path);
+		client.print(" HTTP/1.1");
+		client.print("Host: ");
+		client.println(server);
+		client.println("Content-type: application/x-www-form-urlencoded");
+		client.print("Content-Length: ");
+		client.println(gpsData.length());
+		client.println();
+		client.print(gpsData);
+	}
+
+	// End HTTP connection
+	if (client.connected()) {
 		client.stop();
-	} else {
-		
 	}
 
-	if (client.available()) {
-		char c = client.read();
-		Serial.println("Message from server : ");
-		Serial.print(c);
-	}
-	           
-	// Humidity Sensor
-	float h = dht.readHumidity();
-	float t = dht.readTemperature();
-	Serial.println("--- Humidity Sensor ---");
-	Serial.print("Humidity is ");
-	Serial.print(h,1);
-	Serial.print(" / Temperature is ");
-	Serial.println(t,1);
-
-	// Pressure Sensor
-	Serial.println("--- Pressure Sensor ---");
-	Serial.print("Temperature = ");
-	Serial.print(bmp.readTemperature());
-	Serial.print(" *C");
-
-	Serial.print(" / Pressure = ");
-	Serial.print(bmp.readPressure());
-	Serial.println(" Pa");
-
-	// Calculate altitude assuming 'standard' barometric
-	// pressure of 1013.25 millibar = 101325 Pascal
-	Serial.print("Altitude = ");
-	Serial.print(bmp.readAltitude());
-	Serial.print(" meters");
-	Serial.print(" / Pressure at sealevel (calculated) = ");
-	Serial.print(bmp.readSealevelPressure());
-	Serial.println(" Pa");
-	// you can get a more precise measurement of altitude
-	// if you know the current sea level pressure which will
-	// vary with weather and such. If it is 1015 millibars
-	// that is equal to 101500 Pascals.
-	Serial.print("Real altitude = ");
-	Serial.print(bmp.readAltitude(101500));
-	Serial.println(" meters");
-	Serial.println("");
-	delay(2000);
+	delay(DELAY);
 }
-
 

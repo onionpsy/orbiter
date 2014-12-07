@@ -196,9 +196,6 @@ AVRDUDE_CONF = path.join(ARDUINO_HOME, 'hardware/tools/avrdude.conf') # MODIF
 
 AVR_BIN_PREFIX = path.join(AVR_HOME, 'avr-')
 
-print 'OMG'
-print AVR_BIN_PREFIX
-
 ARDUINO_LIBS = [path.join(ARDUINO_HOME, 'libraries')]
 if EXTRA_LIB:
     ARDUINO_LIBS.append(EXTRA_LIB)
@@ -332,6 +329,7 @@ def fnPrintInfo(target, source, env):
         print "* %s: %s (%s)"%(k, value, cameFrom)
     print "* avr-size:"
     print AVR_PATH_PREFIX+'size'
+    print "* maximum size for hex file: %s bytes" % getBoardConf('upload.maximum_size')
     run([AVR_PATH_PREFIX + 'size', '--target=ihex', str(source[0])])
     # TODO: check binary size
     print "* maximum size for hex file: %s bytes" % getBoardConf('upload.maximum_size')
