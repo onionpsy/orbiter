@@ -1,5 +1,7 @@
 /*
  * 2014 - Patrice.S
+ *
+ * Slave sender
  */
 
 #include <GSM.h>
@@ -7,6 +9,8 @@
 
 #include <AltSoftSerial.h>
 #include "floatToString.h"
+
+#include <Wire.h>
 
 
 /* PINS Configuration (GSM Board)
@@ -57,7 +61,10 @@ TinyGPSPlus gps;
 
 
 AltSoftSerial ss;
-
+String alt;
+String lng;
+String lat;
+char buffer[20];
 
 void setup() {
 	Serial.begin(4800); // or 4800
@@ -65,28 +72,31 @@ void setup() {
 
 	ss.begin(GPS_RATE);
 
+	Wire.begin(2);
+	Wire.onRequest(request_event);
+
 	boolean gsmConnected = false;
 
 	// Test GSM connection
-	while (!gsmConnected) {
-		if ((gsmAccess.begin(GSMPINNUMBER) == GSM_READY) &
-			(gprsAccess.attachGPRS(GPRS_APN, GPRS_LOGIN, GPRS_PASSWORD) == GPRS_READY)) {
-			gsmConnected = true;
-		} else {
-			delay(1000);
-		}
-	}
-
-	// Test GPRS connect (send HTTP request)
-	if (client.connect(server, port)) {
-		client.print("GET ");
-		client.print(path);
-		client.println(" HTTP/1.0");
-		client.println();
-		Serial.println("OK");
-	} else {
-		Serial.println("NOT OK");
-	}
+//	while (!gsmConnected) {
+//		if ((gsmAccess.begin(GSMPINNUMBER) == GSM_READY) &
+//			(gprsAccess.attachGPRS(GPRS_APN, GPRS_LOGIN, GPRS_PASSWORD) == GPRS_READY)) {
+//			gsmConnected = true;
+//		} else {
+//			delay(1000);
+//		}
+//	}
+//
+//	// Test GPRS connect (send HTTP request)
+//	if (client.connect(server, port)) {
+//		client.print("GET ");
+//		client.print(path);
+//		client.println(" HTTP/1.0");
+//		client.println();
+//		Serial.println("OK");
+//	} else {
+//		Serial.println("NOT OK");
+//	}
 }
 
 void loop() {
@@ -98,10 +108,9 @@ void loop() {
 	}
 	
 	// Parse values (for SMS)
-	char buffer[25];
-	String lat = floatToString(buffer, gps.location.lat(), 5);
-	String lng = floatToString(buffer, gps.location.lng(), 5);
-	String alt = String(gps.altitude.meters());
+	lat = floatToString(buffer, gps.location.lat(), 6);
+	lng = floatToString(buffer, gps.location.lng(), 6);
+	alt = String(gps.altitude.meters());
 
 	// POST data request
 	gpsData += "lat=" + lat;
@@ -116,24 +125,39 @@ void loop() {
 	Serial.println(F("GPS DATA : "));
 	Serial.println(gpsData);
 
-	if (client.connect(server, port)) {
-		client.print("POST ");
-		client.print(path);
-		client.print(" HTTP/1.1");
-		client.print("Host: ");
-		client.println(server);
-		client.println("Content-type: application/x-www-form-urlencoded");
-		client.print("Content-Length: ");
-		client.println(gpsData.length());
-		client.println();
-		client.print(gpsData);
-	}
-
-	// End HTTP connection
-	if (client.connected()) {
-		client.stop();
-	}
+//	if (client.connect(server, port)) {
+//		client.print("POST ");
+//		client.print(path);
+//		client.print(" HTTP/1.1");
+//		client.print("Host: ");
+//		client.println(server);
+//		client.println("Content-type: application/x-www-form-urlencoded");
+//		client.print("Content-Length: ");
+//		client.println(gpsData.length());
+//		client.println();
+//		client.print(gpsData);
+//	}
+//
+//	// End HTTP connection
+//	if (client.connected()) {
+//		client.stop();
+//	}
 
 	delay(DELAY);
 }
 
+/*
+ * GPS data for SD card (tranferred to Teensy with Wire)
+ */
+void request_event() {
+	//char buffer[25];
+	//String lat = floatToString(buffer, gps.location.lat(), 5);
+	//String lng = floatToString(buffer, gps.location.lng(), 5);
+	String gps_data = lat + ";" + lng + ";" + (String) gps.altitude.meters();
+
+	char* gps_data_chars = (char*) malloc(sizeof(char)*(gps_data.length() + 1));
+	gps_data.toCharArray(gps_data_chars, gps_data.length() + 1);
+	Serial.println(F("SEND : "));
+	Serial.println(gps_data_chars);
+	Wire.write(gps_data_chars);
+}

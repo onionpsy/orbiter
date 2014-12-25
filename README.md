@@ -8,7 +8,12 @@ Verify that you have theses lib installed in sketchbook/libraries/
  * GSM : https://github.com/psych0pat/Official-Arduino
 
 ## Usage
-```$ scons```
+### Arduino part :
+```$ scons upload```
+
+### Teensy part :
+Downclock the Teensy CPU to 8Mhz with teensyduino then compile and upload.
+
 
 
 ## Documentation
